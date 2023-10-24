@@ -12,16 +12,21 @@ import (
 	"strconv"
 	"time"
 
-	//"database/sql"
+	"gopkg.in/yaml.v2"
+
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
-	//_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-var DBCon *sql.DB
-var Token string
-
+// types declaration
+type Config struct {
+	Token         string
+	Target        string
+	TargetChannel string
+	TargetServer  string
+}
 type User struct {
 	id      int
 	name    string
@@ -30,33 +35,61 @@ type User struct {
 	fail    int
 }
 
+// variable declaration and initialization
+var DBCon *sql.DB
+var Token string
+var cfg Config
+var counter = 0
+
 func init() {
-	flag.StringVar(&Token, "t", "", "Bot Token")
+	// Loading config from conf file
+	flag.StringVar(&cfg.Token, "Token", "", "Bot Token")
+	flag.StringVar(&cfg.Target, "Target", "", "Target ID")
+	flag.StringVar(&cfg.TargetChannel, "Channel", "", "Channel ID")
+	flag.StringVar(&cfg.TargetServer, "Server", "", "Server ID")
 	flag.Parse()
 }
 
-var counter = 0
+func loadConfigFromFile(filename string) error {
+	// Load config from specified file and parse using yaml decoder
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	err = decoder.Decode(&cfg)
+	return err
+}
 
 func main() {
-	discord, err := discordgo.New("Bot " + "MTE1NzQ5MTg5Nzk4MDQyNDIwMg.GbJfoK.UM_2yGvXRkIeGdQQW0i_i_Vlz0HK6hd1ipH1dQ")
+	// Load configuration from a file
+	if err := loadConfigFromFile("config.yaml"); err != nil {
+		log.Fatalf("Erro ao carregar configuração: %v", err)
+		return
+	}
+
+	fmt.Println(cfg.Token)
+	discord, err := discordgo.New("Bot " + cfg.Token)
 	if err != nil {
-		fmt.Println("Error creating session", err)
+		fmt.Println("Erro ao criar sessão: ", err)
 		return
 	}
 
 	discord.AddHandler(messageCreate)
 	discord.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
 
-	//DBCon, err := PrepareDb()
-	//if err != nil {
-	//	log.Fatal(err)
-	//} else {
-	//	log.Println("Banco inicializado com sucesso.", DBCon.Stats())
-	//}
+	DBCon, err = PrepareDb()
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		log.Println("Banco inicializado com sucesso: ", DBCon.Stats())
+	}
 
 	err = discord.Open()
 	if err != nil {
-		log.Fatal("Erro ao abrir conexão com banco: ", err)
+		log.Fatal("Erro ao abrir conexão com discord: ", err)
 		return
 	}
 
@@ -66,7 +99,7 @@ func main() {
 	<-sc
 
 	CloseErr := discord.Close()
-	if err != nil {
+	if CloseErr != nil {
 		log.Println(CloseErr)
 	}
 }
@@ -90,13 +123,7 @@ func rollTheDices() int {
 }
 
 func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
-	TARGET := "154562406809468928"
-	SERVER := "919946669745905714"
-	SalaDoBot := "919946669745905716"
-	// TARGET := "477619741733683217"
-	//SalaDoBot := "1158492378534002800"
-	//SERVER := "788516492818776086"
-	TargetMember, _ := s.GuildMember(SERVER, TARGET)
+	TargetMember, _ := s.GuildMember(cfg.TargetServer, cfg.Target)
 
 	// ignore bot messages
 	if m.Author.ID == s.State.User.ID {
@@ -105,8 +132,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	// check if user is registered in database
-	var authorId string
-	query := "SELECT id FROM users WHERE id=?"
+	query := "SELECT id FROM users WHERE id=" + m.Author.ID
 	rows, err := DBCon.Query(query, m.Author.ID)
 	if err != nil {
 		fmt.Println(err)
@@ -117,24 +143,23 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println(user)
+		fmt.Println("USER IS: ", user)
 	}
-	fmt.Println(authorId)
-	//if err == sql.ErrNoRows {
-	//	fmt.Println("this is where we create")
-	//}
-	if m.ChannelID == SalaDoBot && m.Content == "contagem" {
+	if err == sql.ErrNoRows {
+		fmt.Println("this is where we create")
+	}
+	if m.ChannelID == cfg.TargetChannel && m.Content == "contagem" {
 		_, _ = s.ChannelMessageSend(m.ChannelID, "Hoje foram chutadas "+strconv.Itoa(counter)+" pessoas, "+m.Author.Mention()+"!")
 		return
 	}
 
-	if m.ChannelID == SalaDoBot && m.Content == "hora do perigo" {
+	if m.ChannelID == cfg.TargetChannel && m.Content == "hora do perigo" {
 
-		// if m.Author.ID == TARGET {
-		// 	_, _ = s.ChannelMessageSend(m.ChannelID, "Na-na-ni-na-não "+m.Author.Mention()+"!")
-		// 	return
-		// }
-		voiceState, err := s.State.VoiceState(SERVER, TARGET)
+		if m.Author.ID == cfg.Target {
+			_, _ = s.ChannelMessageSend(m.ChannelID, "Na-na-ni-na-não "+m.Author.Mention()+"!")
+			return
+		}
+		voiceState, err := s.State.VoiceState(cfg.TargetServer, cfg.Target)
 		if voiceState == nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+TargetMember.Mention()+" sem ele estar em alguma sala 😥")
 			return
@@ -151,7 +176,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 			data := discordgo.GuildMemberParams{
 				ChannelID: &channel,
 			}
-			_, _ = s.GuildMemberEdit(SERVER, TARGET, &data)
+			_, _ = s.GuildMemberEdit(cfg.TargetServer, cfg.Target, &data)
 			counter++
 		} else if dice == 12 {
 			time.Sleep(2 * time.Second)
@@ -160,7 +185,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 			data := discordgo.GuildMemberParams{
 				ChannelID: &channel,
 			}
-			_, _ = s.GuildMemberEdit(SERVER, m.Author.ID, &data)
+			_, _ = s.GuildMemberEdit(cfg.TargetServer, m.Author.ID, &data)
 		} else {
 			time.Sleep(2 * time.Second)
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Teve sorte desta vez!")
