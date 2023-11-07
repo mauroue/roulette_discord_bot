@@ -3,16 +3,16 @@ package main
 import (
 	"container/list"
 	"database/sql"
-	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"syscall"
 
@@ -22,13 +22,13 @@ import (
 
 // types declaration
 type Config struct {
-	Token         string
-	Target        string
-	TargetChannel string
-	TargetServer  string
+	Token         string `yaml:"token"`
+	Target        string `yaml:"target"`
+	TargetChannel string `yaml:"target-channel"`
+	TargetServer  string `yaml:"target-server"`
 }
 type User struct {
-	id      int
+	id      int64
 	name    string
 	tickets int
 	success int
@@ -37,18 +37,8 @@ type User struct {
 
 // variable declaration and initialization
 var DBCon *sql.DB
-var Token string
-var cfg Config
+var cfg *Config
 var counter = 0
-
-func init() {
-	// Loading config from conf file
-	flag.StringVar(&cfg.Token, "Token", "", "Bot Token")
-	flag.StringVar(&cfg.Target, "Target", "", "Target ID")
-	flag.StringVar(&cfg.TargetChannel, "Channel", "", "Channel ID")
-	flag.StringVar(&cfg.TargetServer, "Server", "", "Server ID")
-	flag.Parse()
-}
 
 func loadConfigFromFile(filename string) error {
 	// Load config from specified file and parse using yaml decoder
@@ -57,9 +47,12 @@ func loadConfigFromFile(filename string) error {
 		return err
 	}
 	defer file.Close()
+	decode := yaml.NewDecoder(file)
 
-	decoder := yaml.NewDecoder(file)
-	err = decoder.Decode(&cfg)
+	if err := decode.Decode(&cfg); err != nil {
+		return err
+	}
+
 	return err
 }
 
@@ -70,8 +63,13 @@ func main() {
 		return
 	}
 
-	fmt.Println(cfg.Token)
-	discord, err := discordgo.New("Bot " + cfg.Token)
+	token := "Bot " + cfg.Token
+	log.Println("Token is: ", cfg.Token)
+	log.Println("Channel is: ", cfg.TargetChannel)
+	log.Println("Server is: ", cfg.TargetServer)
+	log.Println("Target is: ", cfg.Target)
+
+	discord, err := discordgo.New(token)
 	if err != nil {
 		fmt.Println("Erro ao criar sessão: ", err)
 		return
@@ -117,7 +115,7 @@ func messageCreate(s *discordgo.Session, message *discordgo.MessageCreate) {
 }
 
 func rollTheDices() int {
-	maxNum := 11
+	maxNum := 9
 	result := rand.Intn(maxNum) + 1
 	return result
 }
@@ -127,38 +125,69 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// ignore bot messages
 	if m.Author.ID == s.State.User.ID {
-		fmt.Println("ignoring bot message")
 		return
 	}
 
 	// check if user is registered in database
-	query := "SELECT id FROM users WHERE id=" + m.Author.ID
-	rows, err := DBCon.Query(query, m.Author.ID)
-	if err != nil {
-		fmt.Println(err)
-	}
-	for rows.Next() {
-		var user User
-		err = rows.Scan(&user)
+	query := fmt.Sprintf("SELECT * FROM users WHERE id = %v", m.Author.ID)
+	var user User
+	err := DBCon.QueryRow(query).Scan(&user.id, &user.name, &user.tickets, &user.success, &user.fail)
+	switch {
+	case err == sql.ErrNoRows:
+		fmt.Println("User not found, registering...")
+		createUserQuery := fmt.Sprintf("INSERT INTO users(id,name,tickets,success,fail) VALUES ('%s','%s','0','0','0');", m.Author.ID, m.Author.Username)
+		fmt.Println(createUserQuery)
+		res, err := DBCon.Exec(createUserQuery)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("USER IS: ", user)
+		fmt.Println("User registered ID: ", res)
+	case err != nil:
+		log.Fatal(err)
 	}
-	if err == sql.ErrNoRows {
-		fmt.Println("this is where we create")
-	}
-	if m.ChannelID == cfg.TargetChannel && m.Content == "contagem" {
+	// count command
+	if m.ChannelID == cfg.TargetChannel && strings.Contains(m.Content, "contagem") {
+		log.Println("$$$$$")
 		_, _ = s.ChannelMessageSend(m.ChannelID, "Hoje foram chutadas "+strconv.Itoa(counter)+" pessoas, "+m.Author.Mention()+"!")
 		return
 	}
+	// give tickets command
+	if m.ChannelID == cfg.TargetChannel && strings.Contains(m.Content, "quero dar") {
+		if m.Author.ID == cfg.Target {
+			for _, user := range m.Mentions {
+				query := fmt.Sprintf("UPDATE users SET tickets = tickets + 1 WHERE id = %v", user.ID)
+				_, err := DBCon.Exec(query)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			_, err := s.ChannelMessageSend(m.ChannelID, "olha la ele")
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
 
 	if m.ChannelID == cfg.TargetChannel && m.Content == "hora do perigo" {
+		// if m.Author.ID == cfg.Target {
+		// 	_, _ = s.ChannelMessageSend(m.ChannelID, "Na-na-ni-na-não "+m.Author.Mention()+"!")
+		// 	return
+		// }
 
-		if m.Author.ID == cfg.Target {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Na-na-ni-na-não "+m.Author.Mention()+"!")
+		if user.tickets <= 0 {
+			_, err := s.ChannelMessageSend(m.ChannelID, "Você não tem tickets suficientes! Implore ao "+TargetMember.Mention()+" por mais tickets!")
+			if err != nil {
+				log.Fatal(err)
+			}
 			return
 		}
+		// Discount ticket and start roll
+		ticketQuery := fmt.Sprintf("UPDATE users SET tickets = %v WHERE id = %v", user.tickets-1, user.id)
+		_, err := DBCon.Exec(ticketQuery)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		voiceState, err := s.State.VoiceState(cfg.TargetServer, cfg.Target)
 		if voiceState == nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+TargetMember.Mention()+" sem ele estar em alguma sala 😥")
@@ -169,7 +198,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		dice := rollTheDices()
 		_, _ = s.ChannelMessageSend(m.ChannelID, "O valor lançado foi: "+strconv.Itoa(dice))
-		if dice == 1 {
+		if dice == 10 {
 			time.Sleep(2 * time.Second)
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Boa "+m.Author.Mention()+" azar hein "+TargetMember.Mention()+"até mais!")
 			channel := ""
@@ -178,7 +207,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 			_, _ = s.GuildMemberEdit(cfg.TargetServer, cfg.Target, &data)
 			counter++
-		} else if dice == 12 {
+		} else if dice == 1 {
 			time.Sleep(2 * time.Second)
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Parece que o jogo virou, não é mesmo?!")
 			channel := ""
@@ -219,11 +248,17 @@ func PrepareDb() (*sql.DB, error) {
 	`
 	_, err = db.Exec(createTableSql)
 	if err != nil {
-		db.Close()
+		err := db.Close()
+		if err != nil {
+			return nil, err
+		}
 		log.Fatal("Erro ao criar tabela: ", err)
 		return nil, err
 	}
 
 	return db, nil
 
+}
+
+func updateTickets(user, value) {
 }
