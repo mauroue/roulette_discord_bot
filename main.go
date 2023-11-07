@@ -181,13 +181,13 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 			return
 		}
-		// Discount ticket and start roll
-		ticketQuery := fmt.Sprintf("UPDATE users SET tickets = %v WHERE id = %v", user.tickets-1, user.id)
-		_, err := DBCon.Exec(ticketQuery)
+		// Discount ticket
+		err := updateTickets(user, -1)
 		if err != nil {
 			log.Fatal(err)
 		}
 
+		// Check if target is in voice chat
 		voiceState, err := s.State.VoiceState(cfg.TargetServer, cfg.Target)
 		if voiceState == nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+TargetMember.Mention()+" sem ele estar em alguma sala 😥")
@@ -196,6 +196,8 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err != nil {
 			fmt.Println(err)
 		}
+
+		// roll dice and print to channel
 		dice := rollTheDices()
 		_, _ = s.ChannelMessageSend(m.ChannelID, "O valor lançado foi: "+strconv.Itoa(dice))
 		if dice == 10 {
@@ -260,5 +262,10 @@ func PrepareDb() (*sql.DB, error) {
 
 }
 
-func updateTickets(user, value) {
+func updateTickets(user User, value int) error {
+	_, err := DBCon.Exec(fmt.Sprintf("UPDATE users SET tickets = tickets + %v WHERE id = %v", value, user.id))
+	if err != nil {
+		return err
+	}
+	return nil
 }
