@@ -1,8 +1,0 @@
-token: "MTE1NzQ5MTg5Nzk4MDQyNDIwMg.GbJfoK.UM_2yGvXRkIeGdQQW0i_i_Vlz0HK6hd1ipH1dQ"
-# target: "154562406809468928" # Mauro
-# target-channel: "919946669745905716"
-# target-server: "919946669745905714"
-target: "477619741733683217" # Gustavo
-target-channel: "1158492378534002800" # bot
-target-server: "788516492818776086" # datacake
-db-path: "./database/gustabot.db"
