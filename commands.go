@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
@@ -29,7 +31,9 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		// target command for giving tickets
 		if m.Author.ID == cfg.Target {
 			for _, user := range m.Mentions {
-				query := fmt.Sprintf("UPDATE users SET tickets = tickets + 1 WHERE id = %v", user.ID)
+				re := regexp.MustCompile("[0-9]+")
+				numberOfTickets := re.FindAllString(m.Message.Content, 2)
+				query := fmt.Sprintf("UPDATE users SET tickets = tickets + %v WHERE id = %v", numberOfTickets, user.ID)
 				_, err := DBCon.Exec(query)
 				if err != nil {
 					log.Fatal(err)
