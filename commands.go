@@ -23,7 +23,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		err := DBCon.QueryRow(query).Scan(&tickets)
 		if err != nil {
 			logHistory(m.Author.ID, m.Author.ID, ShowTicketsCommand, false, 0)
-			log.Fatal("Tickets command failed: ", err)
+			log.Println("Tickets command failed: ", err)
 		}
 		logHistory(m.Author.ID, m.Author.ID, ShowTicketsCommand, true, 0)
 		_, _ = s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Você tem %v tickets.", tickets))
@@ -36,13 +36,13 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 				query := fmt.Sprintf("UPDATE users SET tickets = tickets + %v WHERE id = %v", numberOfTickets, user.ID)
 				_, err := DBCon.Exec(query)
 				if err != nil {
-					log.Fatal(err)
+					log.Println(err)
 				}
 				logHistory(m.Author.ID, user.ID, GiveTicketsCommand, true, 0)
 			}
 			_, err := s.ChannelMessageSend(m.ChannelID, "Pronto! Você deu!")
 			if err != nil {
-				log.Fatal("Erro trying to send message to channel: ", err)
+				log.Println("Erro trying to send message to channel: ", err)
 			}
 		} else {
 			for _, user := range m.Mentions {
@@ -50,7 +50,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 			}
 			_, err := s.ChannelMessageSend(m.ChannelID, "Huum, você não é católico suficiente para dar tickets")
 			if err != nil {
-				log.Fatal("Error trying to send message to channel: ", err)
+				log.Println("Error trying to send message to channel: ", err)
 			}
 		}
 	case strings.Contains(m.Content, RollDiceCommand):
@@ -65,7 +65,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 			_, err := s.ChannelMessageSend(m.ChannelID, "Você não tem tickets suficientes! Implore ao "+TargetMember.Mention()+" por mais tickets!")
 			logHistory(m.Author.ID, TargetMember.User.ID, RollDiceCommand, false, 0)
 			if err != nil {
-				log.Fatal("Erro ao postar no canal: ", err)
+				log.Println("Erro ao postar no canal: ", err)
 			}
 			return
 		}
@@ -73,12 +73,12 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		// Check if target is in voice chat
 		userState, err := s.State.VoiceState(cfg.TargetServer, m.Author.ID)
 		if err != nil {
-			log.Fatal("Erro ao acessar o canal de voz: ", err)
+			log.Println("Erro ao acessar o canal de voz: ", err)
 		}
 		fmt.Printf(userState.ChannelID)
 		voiceState, err := s.State.VoiceState(cfg.TargetServer, cfg.Target)
 		if err != nil {
-			log.Fatal("Erro ao acessar o canal de voz: ", err)
+			log.Println("Erro ao acessar o canal de voz: ", err)
 		}
 		if voiceState == nil {
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+TargetMember.Mention()+" sem ele estar em alguma sala 😥")
@@ -89,7 +89,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		// removing ticket before rolling dice
 		err = updateTickets(user, -1)
 		if err != nil {
-			log.Fatal("Erro ao atualizar tickets: ", err)
+			log.Println("Erro ao atualizar tickets: ", err)
 		}
 
 		// roll dice and print to channel
@@ -121,7 +121,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		message := fmt.Sprintf("%v tem %v tickets restantes.", m.Author.Mention(), tickets)
 		_, err := s.ChannelMessageSend(m.ChannelID, message)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 	}
 
@@ -132,7 +132,7 @@ func QueryTickets(userID string) int {
 	var tickets int
 	err := DBCon.QueryRow(query).Scan(&tickets)
 	if err != nil {
-		log.Fatal("Query Tickets", err)
+		log.Println("Query Tickets", err)
 	}
 	return tickets
 }
