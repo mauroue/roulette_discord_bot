@@ -6,13 +6,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
-	TargetMember, _ := s.GuildMember(cfg.TargetServer, cfg.Target)
+	targetMember, _ := s.GuildMember(cfg.TargetServer, cfg.Target)
 	switch {
 	case strings.Contains(m.Content, "contagem"):
 		_, _ = s.ChannelMessageSend(m.ChannelID, "Função desabilitada temporariamente.")
@@ -62,8 +61,8 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		}
 		// check if user has enough tickets
 		if user.tickets <= 0 {
-			_, err := s.ChannelMessageSend(m.ChannelID, "Você não tem tickets suficientes! Implore ao "+TargetMember.Mention()+" por mais tickets!")
-			logHistory(m.Author.ID, TargetMember.User.ID, RollDiceCommand, false, 0)
+			_, err := s.ChannelMessageSend(m.ChannelID, "Você não tem tickets suficientes! Implore ao "+targetMember.Mention()+" por mais tickets!")
+			logHistory(m.Author.ID, targetMember.User.ID, RollDiceCommand, false, 0)
 			if err != nil {
 				log.Println("Erro ao postar no canal: ", err)
 			}
@@ -81,8 +80,8 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 			log.Println("Erro ao acessar o canal de voz: ", err)
 		}
 		if voiceState == nil {
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+TargetMember.Mention()+" sem ele estar em alguma sala 😥")
-			logHistory(m.Author.ID, TargetMember.User.ID, RollDiceCommand, false, 0)
+			_, _ = s.ChannelMessageSend(m.ChannelID, "Huuum, infelizmente não é possível chutar o "+targetMember.Mention()+" sem ele estar em alguma sala 😥")
+			logHistory(m.Author.ID, targetMember.User.ID, RollDiceCommand, false, 0)
 			return
 		}
 
@@ -96,8 +95,7 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 		dice := rollTheDices()
 		_, _ = s.ChannelMessageSend(m.ChannelID, "O valor lançado foi: "+strconv.Itoa(dice))
 		if dice == 10 {
-			time.Sleep(2 * time.Second)
-			_, _ = s.ChannelMessageSend(m.ChannelID, "Boa "+m.Author.Mention()+" azar hein "+TargetMember.Mention()+"até mais!")
+			_, _ = s.ChannelMessageSend(m.ChannelID, "Boa "+m.Author.Mention()+" azar hein "+targetMember.Mention()+"até mais!")
 			channel := ""
 			data := discordgo.GuildMemberParams{
 				ChannelID: &channel,
@@ -105,7 +103,6 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 			_, _ = s.GuildMemberEdit(cfg.TargetServer, cfg.Target, &data)
 		} else if dice == 1 {
 			// user is kicked if rolls critical failure
-			time.Sleep(2 * time.Second)
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Parece que o jogo virou, não é mesmo?!")
 			channel := ""
 			data := discordgo.GuildMemberParams{
@@ -113,7 +110,6 @@ func runCommand(s *discordgo.Session, m *discordgo.MessageCreate, user User) {
 			}
 			_, _ = s.GuildMemberEdit(cfg.TargetServer, m.Author.ID, &data)
 		} else {
-			time.Sleep(2 * time.Second)
 			_, _ = s.ChannelMessageSend(m.ChannelID, "Teve sorte desta vez!")
 		}
 	case strings.Contains(m.Content, RollDiceCommand):
@@ -136,3 +132,5 @@ func QueryTickets(userID string) int {
 	}
 	return tickets
 }
+
+func message(s, 

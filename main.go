@@ -22,6 +22,12 @@ type User struct {
 	fail    int
 }
 
+const (
+	defaultTickets = 0
+	defaultSuccess = 0
+	defaultFail    = 0
+)
+
 func main() {
 	// Load configuration from a file
 	if err := LoadConfigFromFile("config.yaml"); err != nil {
@@ -72,15 +78,16 @@ func main() {
 	}
 }
 
+var commandQueue = list.New()
+
 func messageCreate(s *discordgo.Session, message *discordgo.MessageCreate) {
 	/* 	get the command received and put it in a fifo queue to be processed in order */
-	queue := list.New()
-	queue.PushBack(message)
-	for queue.Len() > 0 {
-		listElement := queue.Front()
+	commandQueue.PushBack(message)
+	for commandQueue.Len() > 0 {
+		listElement := commandQueue.Front()
 		m := listElement.Value.(*discordgo.MessageCreate)
 		mainRoutine(s, m)
-		queue.Remove(listElement)
+		commandQueue.Remove(listElement)
 	}
 }
 
@@ -105,9 +112,8 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 	switch {
 	case err == sql.ErrNoRows:
 		fmt.Println("User not found, registering...")
-		createUserQuery := fmt.Sprintf("INSERT INTO users(id,name,tickets,success,fail) VALUES ('%s','%s','0','0','0');", m.Author.ID, m.Author.Username)
-		fmt.Println(createUserQuery)
-		res, err := DBCon.Exec(createUserQuery)
+		createUserQuery := "INSERT INTO users(id, name, tickets, success, fail) VALUES (?, ?, ?, ?, ?);"
+		res, err := DBCon.Exec(createUserQuery, m.Author.ID, m.Author.Username, defaultTickets, defaultSuccess, defaultFail)
 		if err != nil {
 			log.Fatal("Error creating user: ", err)
 		}
@@ -122,19 +128,17 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func updateTickets(user User, value int) error {
-	_, err := DBCon.Exec(fmt.Sprintf("UPDATE users SET tickets = tickets + %v WHERE id = %v", value, user.id))
+	ticketQuery := "UPDATE users SET tickets = tickets + ? WHERE id = ?"
+	_, err := DBCon.Exec(ticketQuery, value, user.id)
 	if err != nil {
-		return err
+		log.Fatalln("Error updating tickets: ", err)
 	}
 	return nil
 }
 
 func logHistory(authorid string, targetid string, command string, success bool, roll int) {
-	log.Println(authorid, targetid, command, success, roll)
-	query := fmt.Sprintf(`
-		INSERT INTO history(user,target,command,success,roll) VALUES('%v','%v','%v','%v','%v')
-	`, authorid, targetid, command, success, roll)
-	_, err := DBCon.Exec(query)
+	historyQuery := "INSERT INTO history(user,target,command,success,roll) VALUES (?, ?, ?, ?, ?);"
+	_, err := DBCon.Exec(historyQuery, authorid, targetid, command, success, roll)
 	if err != nil {
 		log.Fatalln("Log history failed: ", err)
 	}
