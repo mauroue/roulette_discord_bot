@@ -132,5 +132,3 @@ func QueryTickets(userID string) int {
 	}
 	return tickets
 }
-
-func message(s, 
