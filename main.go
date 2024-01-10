@@ -121,7 +121,7 @@ func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case err != nil:
 		log.Fatal(err)
 	}
-	// commands
+	// parse message and run command from message
 	if m.ChannelID == cfg.TargetChannel {
 		runCommand(s, m, user)
 	}
@@ -131,7 +131,7 @@ func updateTickets(user User, value int) error {
 	ticketQuery := "UPDATE users SET tickets = tickets + ? WHERE id = ?"
 	_, err := DBCon.Exec(ticketQuery, value, user.id)
 	if err != nil {
-		log.Fatalln("Error updating tickets: ", err)
+		log.Println("Error updating tickets: ", err)
 	}
 	return nil
 }
@@ -140,6 +140,6 @@ func logHistory(authorid string, targetid string, command string, success bool, 
 	historyQuery := "INSERT INTO history(user,target,command,success,roll) VALUES (?, ?, ?, ?, ?);"
 	_, err := DBCon.Exec(historyQuery, authorid, targetid, command, success, roll)
 	if err != nil {
-		log.Fatalln("Log history failed: ", err)
+		log.Println("Log history failed: ", err)
 	}
 }
