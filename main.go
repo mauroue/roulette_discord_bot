@@ -31,7 +31,7 @@ const (
 func main() {
 	// Load configuration from a file
 	if err := LoadConfigFromFile("config.yaml"); err != nil {
-		log.Fatalf("Erro ao carregar configuração: %v", err)
+		log.Fatalf("Error loading config: %v", err)
 		return
 	}
 	// get the config values and put it in a variable cfg
@@ -54,20 +54,20 @@ func main() {
 	// initialize database and prepare it if its the first time being ran
 	DBCon, err = PrepareDb()
 	if err != nil {
-		log.Fatal("Erro ao inicializar banco de dados: ", err)
+		log.Fatal("Error initializing database: ", err)
 	} else {
-		log.Println("Banco inicializado com sucesso: ", DBCon.Stats())
+		log.Println("Database initialized succesfully: ", DBCon.Stats())
 	}
 
 	// start connection with discord servers
 	err = discord.Open()
 	if err != nil {
-		log.Fatal("Erro ao abrir conexão com discord: ", err)
+		log.Fatal("Error connecting with discord API: ", err)
 		return
 	}
 
 	// console message and exit keybind
-	fmt.Println("Bot rodando, pressione CTRL + C para sair.")
+	fmt.Println("Bot is running. Press CTRL + C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
