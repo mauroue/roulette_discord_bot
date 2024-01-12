@@ -79,6 +79,7 @@ func main() {
 }
 
 var commandQueue = list.New()
+var mainRoutineComplete = make(chan struct{})
 
 func messageCreate(s *discordgo.Session, message *discordgo.MessageCreate) {
 	/* 	get the command received and put it in a fifo queue to be processed in order */
@@ -86,7 +87,8 @@ func messageCreate(s *discordgo.Session, message *discordgo.MessageCreate) {
 	for commandQueue.Len() > 0 {
 		listElement := commandQueue.Front()
 		m := listElement.Value.(*discordgo.MessageCreate)
-		mainRoutine(s, m)
+		mainRoutine(s, m, mainRoutineComplete)
+		<-mainRoutineComplete
 		commandQueue.Remove(listElement)
 	}
 }
@@ -98,7 +100,12 @@ func rollTheDices() int {
 	return result
 }
 
-func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate) {
+func mainRoutine(s *discordgo.Session, m *discordgo.MessageCreate, complete chan struct{}) {
+
+	defer func() {
+		// signal completion of main routine
+		complete <- struct{}{}
+	}()
 
 	// ignore bot messages
 	if m.Author.ID == s.State.User.ID {
