@@ -29,10 +29,17 @@ const (
 )
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Load configuration from a file
 	if err := LoadConfigFromFile("config.yaml"); err != nil {
 		log.Fatalf("Error loading config: %v", err)
-		return
+		return err
 	}
 	// get the config values and put it in a variable cfg
 	token := "Bot " + cfg.Token
@@ -44,8 +51,7 @@ func main() {
 	// initialize discord session
 	discord, err := discordgo.New(token)
 	if err != nil {
-		fmt.Println("Erro ao criar sessão: ", err)
-		return
+		return fmt.Errorf("Error creating session: %w ", err)
 	}
 	// create a message handler instance and its privileges
 	discord.AddHandler(messageCreate)
@@ -63,7 +69,7 @@ func main() {
 	err = discord.Open()
 	if err != nil {
 		log.Fatal("Error connecting with discord API: ", err)
-		return
+		return err
 	}
 
 	// console message and exit keybind
@@ -75,7 +81,10 @@ func main() {
 	CloseErr := discord.Close()
 	if CloseErr != nil {
 		log.Println(CloseErr)
+		return err
 	}
+	return nil
+
 }
 
 var commandQueue = list.New()
