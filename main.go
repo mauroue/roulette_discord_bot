@@ -26,13 +26,21 @@ const (
 	defaultTickets = 0
 	defaultSuccess = 0
 	defaultFail    = 0
+	exitOK         = 0
+	exitFail       = 1
 )
 
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
-		os.Exit(1)
+		os.Exit(exitFail)
 	}
+	// console message and exit keybind
+	fmt.Println("Bot is running. Press CTRL + C to exit.")
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-sc
+
 }
 
 func run() error {
@@ -71,12 +79,6 @@ func run() error {
 		log.Fatal("Error connecting with discord API: ", err)
 		return err
 	}
-
-	// console message and exit keybind
-	fmt.Println("Bot is running. Press CTRL + C to exit.")
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
 
 	CloseErr := discord.Close()
 	if CloseErr != nil {
